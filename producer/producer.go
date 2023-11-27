@@ -13,7 +13,6 @@ func main() {
 	app.Listen(":3000")
 }
 
-// Producer
 func ConnectProducer(brokersUrl []string) (sarama.SyncProducer, error) {
 	conf := sarama.NewConfig()
 	conf.Producer.Return.Successes = true
@@ -85,4 +84,3 @@ func createMessage(c *fiber.Ctx) error {
 	}
 	return err
 }
-// End of Producer

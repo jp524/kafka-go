@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"github.com/IBM/sarama"
 	"github.com/gofiber/fiber/v2"
+	"errors"
 )
 
 func main() {
@@ -63,6 +64,10 @@ func createMessage(c *fiber.Ctx) error {
 		return err
 	}
 
+	if err := verifyMessageNotEmpty(c, msg); err != nil {
+		return err
+	}
+
 	// Encode message into bytes and send it to Kafka
 	msgInBytes, err := json.Marshal(msg)
 	pushMessageToQueue("messages", msgInBytes)
@@ -85,6 +90,22 @@ func verifyMessageFormat(c *fiber.Ctx, msg *Message) error {
 		})
 	}
 	return err
+}
+
+// verifyMessageNotEmpty returns an error if the user or body of a message are empty.
+func verifyMessageNotEmpty(c *fiber.Ctx, msg *Message) error {
+	comment := ""
+	if msg.Body == "" {
+		comment = "Body cannot be empty"
+	} else if msg.User == "" {
+		comment = "User cannot be empty"
+	}
+
+	if comment != "" {
+		return errors.New("Empty user or body in comment")
+	}
+
+	return nil
 }
 
 // Displays response to HTTP request as JSON

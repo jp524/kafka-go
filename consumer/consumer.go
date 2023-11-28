@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/signal"
@@ -32,13 +33,27 @@ func main() {
 	doneChannel := make(chan struct{})
 
 	go func() {
+		type Message struct {
+			User 	string	`json:"user"`
+			Body 	string  `json:"body"`
+		}
+		var msgValue Message
+
 		for {
 			select {
 			case err := <- consumer.Errors():
 				fmt.Println(err)
 			case msg := <- consumer.Messages():
 				msgCount++
-				fmt.Printf("Received message Count %d: | Topic(%s) | Message(%s) \n", msgCount, string(msg.Topic), string(msg.Value))
+				msgValueInBytes := msg.Value
+
+				err := json.Unmarshal(msgValueInBytes, &msgValue)
+				if err != nil {
+					fmt.Printf("Failed to unmarshal message: %v", err)
+					continue
+				}
+				fmt.Println(msgValue.User + ": " + msgValue.Body)
+				
 			case <- signalChannel:
 				fmt.Println("Interrupt is detected")
 				doneChannel <- struct{}{}

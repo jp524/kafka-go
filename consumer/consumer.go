@@ -31,22 +31,14 @@ func main() {
 	// Channel waiting for a signal to exit the code
 	exitCode := make(chan bool)
 
+	// Goroutine with infinite loop to keep receiving signals
 	go func() {
 		for {
 			select {
 			case err := <- consumer.Errors():
 				fmt.Println(err)
 			case msg := <- consumer.Messages():
-				msgValueInBytes := msg.Value
-				var msgValue Message
-
-				err := json.Unmarshal(msgValueInBytes, &msgValue)
-				if err != nil {
-					fmt.Printf("Failed to unmarshal message: %v", err)
-					continue
-				}
-				fmt.Println(msgValue.User + ": " + msgValue.Body)
-				
+				messageHandler(msg)
 			case <- signals:
 				fmt.Println("Interrupt is detected")
 				exitCode <- true
@@ -59,6 +51,17 @@ func main() {
 	if err := worker.Close(); err != nil {
 		panic(err)
 	}
+}
+
+func messageHandler(msg *sarama.ConsumerMessage) {
+	msgValueInBytes := msg.Value
+	var msgValue Message
+
+	err := json.Unmarshal(msgValueInBytes, &msgValue)
+	if err != nil {
+		fmt.Printf("Failed to unmarshal message: %v", err)
+	}
+	fmt.Println(msgValue.User + ": " + msgValue.Body)
 }
 
 type Message struct {

@@ -13,7 +13,8 @@ func main() {
 	app.Listen(":3000")
 }
 
-func ConnectProducer(brokersUrl []string) (sarama.SyncProducer, error) {
+// connectProducer connects to Kafka as a synchronous producer.
+func connectProducer(brokersUrl []string) (sarama.SyncProducer, error) {
 	conf := sarama.NewConfig()
 	conf.Producer.Return.Successes = true
 	conf.Producer.RequiredAcks = sarama.WaitForAll
@@ -27,9 +28,10 @@ func ConnectProducer(brokersUrl []string) (sarama.SyncProducer, error) {
 	return conn, nil
 }
 
-func PushCommentToQueue(topic string, message []byte) error {
+// pushMessageToQueue pushes messages to a Kafka topic's queue
+func pushMessageToQueue(topic string, message []byte) error {
 	brokersUrl := []string{"localhost:9092"}
-	producer, err := ConnectProducer(brokersUrl)
+	producer, err := connectProducer(brokersUrl)
 	if err != nil {
 		return err
 	}
@@ -53,25 +55,41 @@ type Message struct {
 	Body 	string  `json:"body"`
 }
 
+// createMessage instantiates a Message struct and returns error if message cannot be sent to Kafka.
 func createMessage(c *fiber.Ctx) error {
-	// Instantiate new Message struct
 	msg:= new(Message)
 
-	// Parse Message as body for HTTP request and return if error
-	if err := c.BodyParser(msg); err != nil {
+	if err := verifyMessageFormat(c, msg); err != nil {
+		return err
+	}
+
+	// Encode message into bytes and send it to Kafka
+	msgInBytes, err := json.Marshal(msg)
+	pushMessageToQueue("messages", msgInBytes)
+
+	if err = displayHttpResponse(c, msg); err != nil {
+		return err
+	}
+
+	return err
+}
+
+// verifyMessageFormat parses the body of the request and returns error if invalid format is used.
+func verifyMessageFormat(c *fiber.Ctx, msg *Message) error {
+	err := c.BodyParser(msg)
+
+	if err != nil {
 		c.Status(400).JSON(&fiber.Map{
 			"success": false,
 			"comment": err,
 		})
-		return err
 	}
+	return err
+}
 
-	// Convert Message struct into bytes and send it to Kafka
-	msgInBytes, err := json.Marshal(msg)
-	PushCommentToQueue("messages", msgInBytes)
-
-	// Return Message in JSON format
-	err = c.JSON(&fiber.Map{
+// Displays response to HTTP request as JSON
+func displayHttpResponse(c *fiber.Ctx, msg *Message) error {
+	err := c.JSON(&fiber.Map{
 		"success": true,
 		"comment": "Message pushed successfully",
 		"message": msg,
@@ -81,7 +99,6 @@ func createMessage(c *fiber.Ctx) error {
 			"success": false,
 			"comment": "Error creating product",
 		})
-		return err	
 	}
 	return err
 }

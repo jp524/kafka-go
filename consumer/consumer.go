@@ -24,28 +24,21 @@ func main() {
 
 	fmt.Println("Consumer started")
 
-	signalChannel := make(chan os.Signal, 1)
-	signal.Notify(signalChannel, syscall.SIGINT, syscall.SIGTERM)
+	// Channel to receive UNIX signals to interrupt or terminate program
+	signals := make(chan os.Signal, 1)
+	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
 
-	msgCount := 0
-
-	// Channel with signal for finish
-	doneChannel := make(chan struct{})
+	// Channel waiting for a signal to exit the code
+	exitCode := make(chan bool)
 
 	go func() {
-		type Message struct {
-			User 	string	`json:"user"`
-			Body 	string  `json:"body"`
-		}
-		var msgValue Message
-
 		for {
 			select {
 			case err := <- consumer.Errors():
 				fmt.Println(err)
 			case msg := <- consumer.Messages():
-				msgCount++
 				msgValueInBytes := msg.Value
+				var msgValue Message
 
 				err := json.Unmarshal(msgValueInBytes, &msgValue)
 				if err != nil {
@@ -54,19 +47,23 @@ func main() {
 				}
 				fmt.Println(msgValue.User + ": " + msgValue.Body)
 				
-			case <- signalChannel:
+			case <- signals:
 				fmt.Println("Interrupt is detected")
-				doneChannel <- struct{}{}
+				exitCode <- true
 			}
 		}
 	}()
 
-	<- doneChannel
-	fmt.Println("Processed", msgCount, "messages")
+	<- exitCode
 
 	if err := worker.Close(); err != nil {
 		panic(err)
 	}
+}
+
+type Message struct {
+	User 	string	`json:"user"`
+	Body 	string  `json:"body"`
 }
 
 func connectConsumer(brokersUrl []string) (sarama.Consumer, error) {
